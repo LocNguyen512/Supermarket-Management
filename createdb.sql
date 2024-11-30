@@ -119,6 +119,7 @@ CREATE TABLE DONDATHANG (
     NGAYDATHANG DATE NOT NULL, -- Ngày đặt hàng
     TRANGTHAI VARCHAR(50), -- Trạng thái của đơn hàng
     SL_DAT INT NOT NULL, -- Số lượng đặt hàng phải lớn hơn 0
+    MANSX INT NOT NULL -- Mã nhà sản xuất (cung cấp)
     FOREIGN KEY (MASP) REFERENCES SANPHAM(MASP), -- Liên kết đến bảng SanPham
     FOREIGN KEY (MANSX) REFERENCES NHASX(MANSX) -- Liên kết đến bảng NhaCungCap
 );
