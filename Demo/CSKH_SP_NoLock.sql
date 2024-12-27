@@ -69,7 +69,7 @@ BEGIN
     CLOSE KhachHangSNCursor;
     DEALLOCATE KhachHangSNCursor;
 
-	COMMIT;
+	COMMIT TRANSACTION;
     SET NOCOUNT OFF;
 END;
 GO
@@ -153,7 +153,7 @@ BEGIN
     CLOSE KhachHangCursor;
     DEALLOCATE KhachHangCursor;
 
-	COMMIT;
+	COMMIT TRANSACTION;
     SET NOCOUNT OFF;
 END;
 GO
@@ -184,7 +184,7 @@ BEGIN
 
 	PRINT N'Thêm tài khoản thành công!';
 
-	COMMIT;
+	COMMIT TRANSACTION;
     SET NOCOUNT OFF;
 END
 GO
@@ -221,7 +221,7 @@ BEGIN
 	
 	PRINT N'Cập nhật thông tin thành công!';
 		
-	COMMIT;
+	COMMIT TRANSACTION;
     SET NOCOUNT OFF;
 END
 GO
@@ -257,7 +257,7 @@ BEGIN
 
 	PRINT N'Xóa tài khoản thành công!';
 
-	COMMIT;
+	COMMIT TRANSACTION;
     SET NOCOUNT OFF;
 END
 GO
@@ -287,7 +287,7 @@ BEGIN
 
 	PRINT N'Xóa mã phiếu mua hàng thành công!';
 
-	COMMIT;
+	COMMIT TRANSACTION;
     SET NOCOUNT OFF;
 END;
 GO
@@ -317,7 +317,7 @@ BEGIN
         PRINT N'Không tìm thấy phiếu mua hàng nào liên quan đến số điện thoại này.';
     END
 
-	COMMIT;
+	COMMIT TRANSACTION;
     SET NOCOUNT OFF;
 END
 GO
