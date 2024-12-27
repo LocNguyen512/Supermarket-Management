@@ -151,3 +151,143 @@ BEGIN
 END;
 
 
+--SP Tạo tài khoản khách hàng tt
+CREATE PROC SP_TAOTAIKHOAN
+	@SoDienThoai CHAR(10), @TenKH NVARCHAR(255), @NgaySinh DATE
+AS 
+BEGIN
+	--KIEM TRA SDT
+	IF EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
+	BEGIN
+		RAISERROR (N'Số điện thoại đã được đăng kí cho tài khoản khác',16,1);
+		RETURN;
+	END
+	-- Kiểm tra tham số đầu vào
+    IF @SoDienThoai IS NULL OR @TenKH IS NULL OR @NgaySinh IS NULL
+    BEGIN
+        RAISERROR (N'Thông tin không đầy đủ, vui lòng kiểm tra lại', 16, 1);
+        RETURN; -- Thoát khỏi procedure
+    END
+
+	--THEM VAO BANG KHACHHANG TAI KHOAN MOI
+	INSERT INTO KHACHHANG (SODIENTHOAI, TENKH, NGAYSINH,NGAYDANGKI,MUCKHTT)
+	VALUES (@SoDienThoai, @TenKH, @NgaySinh, GETDATE() , N'Thân Thiết')
+
+	PRINT N'Thêm tài khoản thành công!';
+END
+GO
+
+
+
+--SP Sửa thông tin liên lạc cho khách hàng có nhu cầu thay đổi
+CREATE PROC SP_SUATHONGTINLIENLAC 
+	@SoDienThoaiCu CHAR(10), @TenKHCu NVARCHAR(255), @SoDienThoaiMoi CHAR(10), @TenKHMoi NVARCHAR(255), @NgaySinh DATE
+AS
+BEGIN
+	IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoaiCu	AND NGAYSINH = @NgaySinh AND TENKH = @TenKHCu)
+	BEGIN
+		RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16,1);
+		RETURN;
+	END
+	-- Kiểm tra số điện thoại mới đã tồn tại chưa (tránh trùng lặp)
+    IF EXISTS (
+        SELECT 1 
+        FROM KHACHHANG 
+        WHERE SODIENTHOAI = @SoDienThoaiMoi AND SODIENTHOAI != @SoDienThoaiCu
+    )
+    BEGIN
+        RAISERROR (N'Số điện thoại mới đã được đăng ký cho tài khoản khác!', 16, 1);
+        RETURN;
+    END
+
+	UPDATE KHACHHANG
+	SET SODIENTHOAI = @SoDienThoaiCu, TENKH  =@TenKHMoi
+	WHERE SODIENTHOAI = @SoDienThoaiMoi
+	
+	PRINT N'Cập nhật thông tin thành công!';
+		
+END
+GO
+
+
+--SP xóa tài khoản khách hàng 
+CREATE PROC SP_XOATAIKHOAN
+	@SoDienThoai CHAR(10), @TenKH NVARCHAR(255), @NgaySinh DATE
+AS
+BEGIN
+	IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai	AND NGAYSINH = @NgaySinh AND TENKH = @TenKH)
+	BEGIN
+		RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16,1);
+		RETURN;
+	END
+
+	-- Kiểm tra các mối quan hệ liên quan (nếu có)
+    IF EXISTS (
+        SELECT 1 
+        FROM LSMUAHANG 
+        WHERE SODIENTHOAI = @SoDienThoai
+    )
+    BEGIN
+        RAISERROR (N'Không thể xóa tài khoản vì đã có lịch sử mua hàng!', 16, 1);
+        RETURN;
+    END
+
+	DELETE FROM KHACHHANG
+	WHERE SODIENTHOAI = @SoDienThoai
+
+	PRINT N'Xóa tài khoản thành công!';
+END
+GO
+
+--Xóa pmh nếu đã sử dụng xong
+CREATE PROC SP_XOAPHIEUMUAHANG
+	@MaPhieu VARCHAR(50)
+AS
+BEGIN
+	IF NOT EXISTS (SELECT 1 FROM PHIEUMUAHANG WHERE MAPHIEUMUAHANG  =@MaPhieu)
+	BEGIN
+		RAISERROR (N'Mã phiếu mua hàng không tồn tại',16,1);
+		RETURN;
+	END
+	-- Kiểm tra xem phiếu đã được sử dụng hay chưa
+    IF EXISTS (SELECT 1 FROM PHIEUMUAHANG WHERE MAPHIEUMUAHANG = @MaPhieu AND TRANGTHAI = 1)
+    BEGIN
+        RAISERROR (N'Không thể xóa mã phiếu mua hàng chưa sử dụng', 16, 1);
+        RETURN;
+    END
+
+	DELETE FROM PHIEUMUAHANG 
+	WHERE MAPHIEUMUAHANG = @MaPhieu
+
+	PRINT N'Xóa mã phiếu mua hàng thành công!';
+
+END;
+GO
+
+CREATE PROC SP_KIEMTRAPHIEUMUAHANG
+    @SoDienThoai CHAR(10)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Kiểm tra số điện thoại khách hàng có tồn tại hay không
+    IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
+    BEGIN
+        RAISERROR (N'Số điện thoại khách hàng không tồn tại!', 16, 1);
+        RETURN;
+    END
+
+    -- Kiểm tra tình trạng phiếu mua hàng của khách hàng
+    IF EXISTS (SELECT 1 FROM PHIEUMUAHANG WHERE SODIENTHOAI = @SoDienThoai)
+    BEGIN
+        SELECT * 
+        FROM PHIEUMUAHANG
+        WHERE SODIENTHOAI = @SoDienThoai;
+    END
+    ELSE
+    BEGIN
+        PRINT N'Không tìm thấy phiếu mua hàng nào liên quan đến số điện thoại này.';
+    END
+END
+GO
+
