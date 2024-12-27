@@ -1,10 +1,12 @@
 ﻿USE SupermarketDB
 
+
 --TẶNG PHIẾU MUA HÀNG CHO KHÁCH HÀNG
 CREATE PROC SP_TANGPHIEUMUAHANG
 AS
 BEGIN
     SET NOCOUNT ON;
+    BEGIN TRANSACTION;
 
     -- Khai báo biến
     DECLARE @SoDienThoai CHAR(10);
@@ -67,6 +69,7 @@ BEGIN
     CLOSE KhachHangSNCursor;
     DEALLOCATE KhachHangSNCursor;
 
+	COMMIT;
     SET NOCOUNT OFF;
 END;
 GO
@@ -78,6 +81,7 @@ CREATE PROC SP_CAPNHATKHTT
 AS
 BEGIN
     SET NOCOUNT ON;
+	BEGIN TRANSACTION;
 
     -- Biến lưu ngày hiện tại
     DECLARE @NgayHienTai DATE = GETDATE();
@@ -148,14 +152,19 @@ BEGIN
 
     CLOSE KhachHangCursor;
     DEALLOCATE KhachHangCursor;
-END;
 
+	COMMIT;
+    SET NOCOUNT OFF;
+END;
+GO
 
 --SP Tạo tài khoản khách hàng tt
 CREATE PROC SP_TAOTAIKHOAN
 	@SoDienThoai CHAR(10), @TenKH NVARCHAR(255), @NgaySinh DATE
 AS 
 BEGIN
+	SET NOCOUNT ON;
+    BEGIN TRANSACTION;
 	--KIEM TRA SDT
 	IF EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
 	BEGIN
@@ -174,6 +183,9 @@ BEGIN
 	VALUES (@SoDienThoai, @TenKH, @NgaySinh, GETDATE() , N'Thân Thiết')
 
 	PRINT N'Thêm tài khoản thành công!';
+
+	COMMIT;
+    SET NOCOUNT OFF;
 END
 GO
 
@@ -184,6 +196,9 @@ CREATE PROC SP_SUATHONGTINLIENLAC
 	@SoDienThoaiCu CHAR(10), @TenKHCu NVARCHAR(255), @SoDienThoaiMoi CHAR(10), @TenKHMoi NVARCHAR(255), @NgaySinh DATE
 AS
 BEGIN
+	SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+	
 	IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoaiCu	AND NGAYSINH = @NgaySinh AND TENKH = @TenKHCu)
 	BEGIN
 		RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16,1);
@@ -206,6 +221,8 @@ BEGIN
 	
 	PRINT N'Cập nhật thông tin thành công!';
 		
+	COMMIT;
+    SET NOCOUNT OFF;
 END
 GO
 
@@ -215,6 +232,9 @@ CREATE PROC SP_XOATAIKHOAN
 	@SoDienThoai CHAR(10), @TenKH NVARCHAR(255), @NgaySinh DATE
 AS
 BEGIN
+	SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+	
 	IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai	AND NGAYSINH = @NgaySinh AND TENKH = @TenKH)
 	BEGIN
 		RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16,1);
@@ -236,6 +256,9 @@ BEGIN
 	WHERE SODIENTHOAI = @SoDienThoai
 
 	PRINT N'Xóa tài khoản thành công!';
+
+	COMMIT;
+    SET NOCOUNT OFF;
 END
 GO
 
@@ -244,6 +267,9 @@ CREATE PROC SP_XOAPHIEUMUAHANG
 	@MaPhieu VARCHAR(50)
 AS
 BEGIN
+	SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+	
 	IF NOT EXISTS (SELECT 1 FROM PHIEUMUAHANG WHERE MAPHIEUMUAHANG  =@MaPhieu)
 	BEGIN
 		RAISERROR (N'Mã phiếu mua hàng không tồn tại',16,1);
@@ -261,6 +287,8 @@ BEGIN
 
 	PRINT N'Xóa mã phiếu mua hàng thành công!';
 
+	COMMIT;
+    SET NOCOUNT OFF;
 END;
 GO
 
@@ -268,8 +296,8 @@ CREATE PROC SP_KIEMTRAPHIEUMUAHANG
     @SoDienThoai CHAR(10)
 AS
 BEGIN
-    SET NOCOUNT ON;
-
+	SET NOCOUNT ON;
+    BEGIN TRANSACTION;
     -- Kiểm tra số điện thoại khách hàng có tồn tại hay không
     IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
     BEGIN
@@ -288,6 +316,9 @@ BEGIN
     BEGIN
         PRINT N'Không tìm thấy phiếu mua hàng nào liên quan đến số điện thoại này.';
     END
+
+	COMMIT;
+    SET NOCOUNT OFF;
 END
 GO
 
