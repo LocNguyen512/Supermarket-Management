@@ -1,0 +1,78 @@
+USE MASTER
+GO
+IF DB_ID('SupermarketDB') IS NOT NULL
+	DROP DATABASE SupermarketDB;
+GO
+CREATE DATABASE SupermarketDB;
+GO
+USE SupermarketDB;
+GO
+
+-- Thêm Store Procedure SP_THONGKEBAOCAONGAY
+CREATE PROCEDURE SP_THONGKEBAOCAONGAY
+AS
+BEGIN
+    BEGIN TRANSACTION;
+
+    -- Đặt mức độ cô lập giao dịch
+    SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+
+    DECLARE @NgayBaoCao DATE = CAST(GETDATE() AS DATE);
+    DECLARE @TongKhachHang INT = 0;
+    DECLARE @TongDoanhThu DECIMAL(15,2) = 0.00;
+
+    -- Tính tổng số khách hàng trong ngày
+    SELECT @TongKhachHang = COUNT(DISTINCT SO_DIEN_THOAI)
+    FROM DONHANG
+    WHERE CAST(NGAYMUA AS DATE) = @NgayBaoCao;
+
+    -- Tính tổng doanh thu trong ngày
+    SELECT @TongDoanhThu = SUM(TONGGIATRI)
+    FROM DONHANG
+    WHERE CAST(NGAYMUA AS DATE) = @NgayBaoCao;
+
+    -- Cập nhật bảng BAOCAONGAY
+    UPDATE BAOCAONGAY
+    SET TONGKHACHHANG = @TongKhachHang,
+        TONGDOANHTHU = @TongDoanhThu
+    WHERE NGAYBAOCAO = @NgayBaoCao;
+
+    IF @@ROWCOUNT = 0
+    BEGIN
+        INSERT INTO BAOCAONGAY (NGAYBAOCAO, TONGKHACHHANG, TONGDOANHTHU)
+        VALUES (@NgayBaoCao, @TongKhachHang, @TongDoanhThu);
+    END;
+
+    COMMIT;
+END;
+GO
+
+-- Thêm Store Procedure SP_THONGKESANPHAM
+CREATE PROCEDURE SP_THONGKESANPHAM
+AS
+BEGIN
+    BEGIN TRANSACTION;
+
+    -- Đặt mức độ cô lập giao dịch
+    SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+
+    DECLARE @NgayBaoCao DATE = CAST(GETDATE() AS DATE);
+
+    -- Duyệt qua từng sản phẩm
+    INSERT INTO BAOCAOSP (NGAYBAOCAO, MASP, SLBAN, SLKHMUA)
+    SELECT
+        @NgayBaoCao,
+        SP.MASP,
+        ISNULL(SUM(CTDH.SOLUONG), 0) AS SLBAN,
+        COUNT(DISTINCT DH.SO_DIEN_THOAI) AS SLKHMUA
+    FROM
+        SANPHAM SP
+        LEFT JOIN CHITIETDONHANG CTDH ON SP.MASP = CTDH.MASP
+        LEFT JOIN DONHANG DH ON CTDH.DONHANGID = DH.DONHANGID
+    WHERE
+        CAST(DH.NGAYMUA AS DATE) = @NgayBaoCao
+    GROUP BY SP.MASP;
+
+    COMMIT;
+END;
+GO
