@@ -119,8 +119,6 @@ CREATE TABLE CHI_TIET_DON_HANG (
 );
 
 
-
-
 -- Bảng DonDatHang: Lưu thông tin đơn đặt hàng
 CREATE TABLE DONDATHANG (
     MADDH INT PRIMARY KEY, -- Mã của đơn đặt hàng
@@ -128,7 +126,9 @@ CREATE TABLE DONDATHANG (
     NGAYDATHANG DATE NOT NULL, -- Ngày đặt hàng
     TRANGTHAI VARCHAR(50), -- Trạng thái của đơn hàng
     SL_DAT INT NOT NULL, -- Số lượng đặt hàng phải lớn hơn 0
+	MANSX INT
     FOREIGN KEY (MASP) REFERENCES SANPHAM(MASP), -- Liên kết đến bảng SanPham
+	FOREIGN KEY (MANSX) REFERENCES NHASX(MANSX)
 );
 
 -- Bảng NhanHang: Lưu thông tin các lần nhận hàng
