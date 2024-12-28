@@ -1,10 +1,3 @@
-USE MASTER
-GO
-IF DB_ID('SupermarketDB') IS NOT NULL
-	DROP DATABASE SupermarketDB;
-GO
-CREATE DATABASE SupermarketDB;
-GO
 USE SupermarketDB;
 GO
 -- Thêm dữ liệu vào bảng KHACHHANG
@@ -332,7 +325,6 @@ VALUES
 (49, N'Magic Chef Lò vi sóng', N'Lò vi sóng mini', 49, 1500000, 6, 20, 18),
 (50, N'Viking Lò nướng', N'Lò nướng chuyên nghiệp', 50, 50000000, 6, 2, 1);
 
-
 -- Thêm dữ liệu vào bảng KHUYENMAI
 INSERT INTO KHUYENMAI
 VALUES
@@ -343,9 +335,12 @@ VALUES
 ('5', 3, 22.0, '2024-07-01', '2024-07-31', 120),
 ('6', 1, 8.0, '2024-08-01', '2024-08-15', 35),
 ('7', 2, 20.0, '2024-08-10', '2024-08-25', 30),
-('8', 3, 25.0, '2024-08-01', '2024-08-31', 150);
+('8', 3, 25.0, '2024-08-01', '2024-08-31', 150),
+('9', 3, 25.0, '2024-08-01', '2024-08-31', 150),
+('10', 3, 25.0, '2024-08-01', '2024-08-31', 150);
 
 -- Thêm dữ liệu vào bảng KHUYENMAI_KHACHHANG
+
 INSERT INTO KHUYENMAI_KHACHHANG
 VALUES
 ('1', N'THÂN THIẾT', 5),
@@ -412,7 +407,7 @@ VALUES
 (5, '8'),
 (6, '9'),
 (7, '10'),
-(8, '10'),
+(8, '10');
 
 -- Thêm dữ liệu vào bảng DONHANG
 INSERT INTO DONHANG
@@ -446,17 +441,13 @@ VALUES
 ('27', '0900000027', '2024-01-27 20:00:00', 2750000),
 ('28', '0900000028', '2024-01-28 21:00:00', 2850000),
 ('29', '0900000029', '2024-01-29 08:30:00', 2950000),
-('30', '0900000030', '2024-01-30 09:45:00', 3050000),
-
-
-
-
+('30', '0900000030', '2024-01-30 09:45:00', 3050000);
 
 INSERT INTO CHITIETDONHANG
 VALUES
 ('5', 1, 2, null, null),
 ('5', 2, 2, null, null),
-('5', 3, 2, null, null),
+('5', 3, 2, null, null);
 
 
 -- Thêm dữ liệu vào bảng DONDATHANG
