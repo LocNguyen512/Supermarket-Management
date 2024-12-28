@@ -726,11 +726,6 @@ DROP PROCEDURE
 */
 -------------------------------------------------------------------------------------------------------
 /*BỘ PHẬN XỬ LÝ ĐƠN HÀNG*/
-USE SupermarketDB;
-GO
-
-
-
 GO
 CREATE PROCEDURE SP_XU_LI_DON @MADONHANG NVARCHAR(50)
 AS
