@@ -625,7 +625,7 @@ GO
 --EXEC SP_KIEMTRA_APDUNG_KHUYENMAI 1, '2024-12-28', N'THÂN THIẾT'
 
 -- 4. Xóa sản phẩm
-CREATE OR ALTER PROCEDURE SP_XOA_SAN_PHAM
+CREATE PROCEDURE SP_XOA_SAN_PHAM
     @MASP INT
 AS
 BEGIN
@@ -652,14 +652,6 @@ BEGIN
     DELETE FROM SANPHAM_KHUYENMAI
     WHERE MASP = @MASP;
 
-    DELETE FROM KHUYENMAI
-    WHERE MAKHUYENMAI IN (
-        SELECT DISTINCT KHUYENMAIID
-        FROM SANPHAM_KHUYENMAI
-        WHERE MASP = @MASP
-    );
-
-
     -- Xóa sản phẩm
     DELETE FROM SANPHAM
     WHERE MASP = @MASP;
@@ -668,7 +660,7 @@ BEGIN
 END
 GO
 
---EXEC SP_XOA_SAN_PHAM 1
+-- EXEC SP_XOA_SAN_PHAM 2
 
 -------------------------------------------------------------------------------------------------------
 /*BỘ PHẬN XỬ LÝ ĐƠN HÀNG*/
