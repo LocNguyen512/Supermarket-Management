@@ -1241,29 +1241,8 @@ END;
 GO
 
 /*
--- LỖI PHANTOM--
--- TÌNH HUỐNG 1
-INSERT INTO DANHMUC
-VALUES (1, N'ABC'), (2, N'DEF')
-GO
-INSERT INTO NHASX
-VALUES (1, N'CONG TY 1', '0123455111')
 
-INSERT INTO SANPHAM (MASP, TENSP, MOTA, MANSX, GIA, MADANHMUC, SLSPTD, SOLUONGTON)
-VALUES 
-(1, N'Sản phẩm A', N'Mô tả sản phẩm A', 1, 1, 1, 100, 50),
-(2, N'Sản phẩm B', N'Mô tả sản phẩm B', 1, 0, 2, 150, 75);
-TẠO SESSION 2 VÀ CHẠY CODE DƯỚI
-EXEC SP_KIEMTRA_TONKHO;
-EXEC SP_THEM_SAN_PHAM 
-    @MASP = 51,
-    @TENSP = N'Sản phẩm mới',
-    @MOTA = N'Mô tả sản phẩm mới',
-    @TENNSX = N'Nokia',
-    @GIA = 150000,
-    @TENDANHMUC = N'Điện tử',
-    @SLSPTD = 120,
-    @SLTK = 60;
+
 */
 
 -------------------------------------------------------------------------------------------------------
@@ -1331,8 +1310,28 @@ BEGIN
 END;
 GO
 /*LỖI LOST UPDATE*/
+-- TÌNH HUỐNG 1
+INSERT INTO DANHMUC
+VALUES (1, N'ABC'), (2, N'DEF')
+GO
+INSERT INTO NHASX
+VALUES (1, N'CONG TY 1', '0123455111')
 
-/*LỖI PHANTOM READ*/
+INSERT INTO SANPHAM (MASP, TENSP, MOTA, MANSX, GIA, MADANHMUC, SLSPTD, SOLUONGTON)
+VALUES 
+(1, N'Sản phẩm A', N'Mô tả sản phẩm A', 1, 1, 1, 100, 50),
+(2, N'Sản phẩm B', N'Mô tả sản phẩm B', 1, 0, 2, 150, 75);
+
+EXEC SP_KIEMTRA_TONKHO;
+EXEC SP_THEM_SAN_PHAM 
+    @MASP = 51,
+    @TENSP = N'Sản phẩm mới',
+    @MOTA = N'Mô tả sản phẩm mới',
+    @TENNSX = N'Nokia',
+    @GIA = 150000,
+    @TENDANHMUC = N'Điện tử',
+    @SLSPTD = 120,
+    @SLTK = 60;
 
 -- TÌNH HUỐNG 3
 select* from SANPHAM
