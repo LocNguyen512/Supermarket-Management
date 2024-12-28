@@ -219,7 +219,7 @@ AS
 BEGIN
 	SET NOCOUNT ON;
      
-	
+	--Kiểm tra có tài khoản nào ứng với thông tin đầu vào hay không
 	IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoaiCu	AND NGAYSINH = @NgaySinh AND TENKH = @TenKHCu)
 	BEGIN
 		RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16,1);
@@ -255,7 +255,7 @@ AS
 BEGIN
 	SET NOCOUNT ON;
      
-	
+	--Kiểm tra sdt đã được đăng kí trước đó chưa 
 	IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai	AND NGAYSINH = @NgaySinh AND TENKH = @TenKH)
 	BEGIN
 		RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16,1);
@@ -602,7 +602,7 @@ GO
 --EXEC SP_KIEMTRA_APDUNG_KHUYENMAI 1, '2024-12-28', N'THÂN THIẾT'
 
 -- 4. Xóa sản phẩm
-CREATE OR ALTER PROCEDURE SP_XOA_SAN_PHAM
+CREATE PROCEDURE SP_XOA_SAN_PHAM
     @MASP INT
 AS
 BEGIN
@@ -618,24 +618,9 @@ BEGIN
         RETURN;
     END
 
-    -- Xóa các thông tin khuyến mãi liên quan đến sản phẩm
-    DELETE FROM KHUYENMAI_KHACHHANG
-    WHERE MAKHUYENMAI IN (
-        SELECT DISTINCT KHUYENMAIID
-        FROM SANPHAM_KHUYENMAI
-        WHERE MASP = @MASP
-    );
     -- Xóa các khuyến mãi liên quan sản phẩm
     DELETE FROM SANPHAM_KHUYENMAI
     WHERE MASP = @MASP;
-
-    DELETE FROM KHUYENMAI
-    WHERE MAKHUYENMAI IN (
-        SELECT DISTINCT KHUYENMAIID
-        FROM SANPHAM_KHUYENMAI
-        WHERE MASP = @MASP
-    );
-
 
     -- Xóa sản phẩm
     DELETE FROM SANPHAM
@@ -645,7 +630,7 @@ BEGIN
 END
 GO
 
---EXEC SP_XOA_SAN_PHAM 1
+-- EXEC SP_XOA_SAN_PHAM 2
 
 -------------------------------------------------------------------------------------------------------
 --/*BỘ PHẬN XỬ LÝ ĐƠN HÀNG*/
