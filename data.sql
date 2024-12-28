@@ -404,6 +404,8 @@ VALUES
 INSERT INTO SANPHAM_KHUYENMAI
 VALUES
 (1, 'KM_FLASH_JUN2024'),
+(2, 'KM_FLASH_JUN2024'),
+(3, 'KM_FLASH_JUN2024'),
 (1, 'KM_MEMBER_JUN2024'),
 (2, 'KM_COMBO_JUN2024'),
 (3, 'KM_FLASH_JUL2024'),
@@ -511,13 +513,6 @@ VALUES
 
 
 -- Thêm dữ liệu vào bảng CHI_TIET_DON_HANG
-INSERT INTO CHITIETDONHANG
-VALUES
-(5, 1, 2, null, null),
-(5, 3, 2, null, null),
-(5, 9, 2, null, null),
-(5, 12, 2, null, null),
-(5, 15, 2, null, null);
 
 INSERT INTO CHITIETDONHANG
 VALUES
@@ -529,8 +524,9 @@ VALUES
 (3, 6, 3, 200000, '3'),
 (4, 7, 1, 50000, '4'),
 (4, 8, 2, 75000, '4'),
-(5, 9, 1, 60000, '5'),
-(5, 10, 1, 100000, '5'),
+(5, 1, 2, null, null),
+(5, 2, 2, null, null),
+(5, 3, 2, null, null),
 (6, 11, 2, 45000, '6'),
 (6, 12, 1, 95000, '6'),
 (7, 13, 1, 50000, '7'),
