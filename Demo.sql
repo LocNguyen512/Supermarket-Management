@@ -29,7 +29,15 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        -- Kiểm tra ngày sinh có nằm trong khoảng xét
+        --Kiểm tra số điện thoại khách hàng này có tồn tại không
+		IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
+		BEGIN
+			RAISERROR (N'Không tìm thấy số điện thoại này trong dữ liệu khách hàng',16,1);
+			RETURN;
+		END
+
+
+        -- Kiểm tra ngày sinh có nằm trong khoảng từ ngày hiện tại đến cuối tháng tiếp theo
         IF CONVERT(VARCHAR(5), @NgaySinh, 110) BETWEEN 
            CONVERT(VARCHAR(5), @NgayBatDau, 110) AND 
            CONVERT(VARCHAR(5), DATEADD(MONTH, 1, @NgayBatDau), 110)
@@ -43,6 +51,19 @@ BEGIN
                 IF NOT EXISTS (SELECT 1 FROM PHIEUMUAHANG WHERE MAPHIEUMUAHANG = @MaPhieu)
                     BREAK; -- Thoát vòng lặp nếu mã là duy nhất
             END;
+
+
+			--(chổ này) đọc lấy mã khtt của khách hàng
+			IF EXISTS (SELECT MUCKHTT FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
+			BEGIN
+				SET @MucKHTT = (SELECT MUCKHTT FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
+			END
+			ELSE 
+			BEGIN
+				RAISERROR (N'Không tìm thấy dữ liệu khách hàng này',16,1);
+				RETURN;
+			END
+
 
             -- Thêm phiếu mua hàng cho khách hàng
             INSERT INTO PHIEUMUAHANG (MAPHIEUMUAHANG, SODIENTHOAI, NGAYHIEULUC, NGAYHETHAN, GIATRI, TRANGTHAI)
