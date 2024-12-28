@@ -12,47 +12,60 @@ BEGIN
     DECLARE @SoDienThoai CHAR(10);
     DECLARE @NgaySinh DATE;
     DECLARE @MucKHTT NVARCHAR(10);
-    DECLARE @NgayBatDau DATE = GETDATE();
+    DECLARE @NgayBatDau DATE = '2024-01-01';
     DECLARE @NgayKetThuc DATE = DATEADD(DAY, 30, @NgayBatDau); -- Phiếu có hạn 30 ngày
-    DECLARE @MaPhieu NVARCHAR(50);
-
     -- Bắt đầu giao dịch với cấp độ Repeatable Read
     BEGIN TRANSACTION;
     SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 
     -- Cursor để duyệt qua khách hàng
-    DECLARE KhachHangSNCursor CURSOR DYNAMIC LOCAL FORWARD_ONLY FOR
+    DECLARE KhachHangSNCursor CURSOR FORWARD_ONLY FOR
     SELECT SODIENTHOAI, NGAYSINH
-    FROM KHACHHANG WITH (ROWLOCK); -- Khóa dòng khách hàng để đảm bảo dữ liệu không thay đổi trong quá trình xử lý
+    FROM KHACHHANG WITH (UPDLOCK, ROWLOCK); -- Đặt khóa dòng khi đọc khách hàng
 
     OPEN KhachHangSNCursor;
 
     FETCH NEXT FROM KhachHangSNCursor INTO @SoDienThoai, @NgaySinh;
+	WAITFOR DELAY '00:00:10';
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
 
 		--Kiểm tra số điện thoại khách hàng này có tồn tại không
-		IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
+		IF NOT EXISTS (SELECT 1 FROM KHACHHANG WITH(ROWLOCK,  UPDLOCK) WHERE SODIENTHOAI = @SoDienThoai)
 		BEGIN
-			RAISERROR (N'Không tìm thấy số điện thoại này trong dữ liệu khách hàng',16,1);
+			RAISERROR (N'Không tìm thấy dữ liệu khách hàng này hehe',16,1);
+			CLOSE KhachHangSNCursor;
+			DEALLOCATE KhachHangSNCursor;
 			RETURN;
 		END
 
-
-        -- Kiểm tra ngày sinh có nằm trong khoảng từ ngày hiện tại đến cuối tháng tiếp theo
         IF CONVERT(VARCHAR(5), @NgaySinh, 110) BETWEEN 
            CONVERT(VARCHAR(5), @NgayBatDau, 110) AND 
-           CONVERT(VARCHAR(5), DATEADD(MONTH, 1, @NgayBatDau), 110)
-        BEGIN
-            -- Tạo mã phiếu duy nhất
-            WHILE 1 = 1
-            BEGIN
-                SET @MaPhieu = CAST(NEWID() AS NVARCHAR(50));
+           CONVERT(VARCHAR(5), @NgayKetThuc, 110)
 
-                -- Kiểm tra nếu mã đã tồn tại
-                IF NOT EXISTS (SELECT 1 FROM PHIEUMUAHANG WHERE MAPHIEUMUAHANG = @MaPhieu)
-                    BREAK; -- Thoát vòng lặp nếu mã là duy nhất
+        BEGIN
+			DECLARE @MaPhieu NVARCHAR(8);
+			DECLARE @LastMaPhieu NVARCHAR(8);
+			DECLARE @NextId INT;
+            -- Tạo mã phiếu duy nhất\
+            BEGIN
+					-- Tạo mã phiếu duy nhất
+				SELECT TOP 1 @LastMaPhieu = MAPHIEUMUAHANG
+				FROM PHIEUMUAHANG
+				ORDER BY MAPHIEUMUAHANG DESC;
+
+				-- Tạo mã phiếu mua hàng mới
+				IF @LastMaPhieu IS NULL
+				BEGIN
+					SET @MaPhieu = 'PMH00001'; -- Nếu không có mã nào, bắt đầu từ PMH00001
+				END
+				ELSE
+				BEGIN
+					SET @NextId = CAST(SUBSTRING(@LastMaPhieu, 4, LEN(@LastMaPhieu) - 3) AS INT) + 1;
+					SET @MaPhieu = 'PMH' + RIGHT('00000' + CAST(@NextId AS NVARCHAR), 5);
+      
+				END;
             END;
 
 
@@ -64,6 +77,8 @@ BEGIN
 			ELSE 
 			BEGIN
 				RAISERROR (N'Không tìm thấy dữ liệu khách hàng này',16,1);
+				CLOSE KhachHangSNCursor;
+				DEALLOCATE KhachHangSNCursor;
 				RETURN;
 			END
 
@@ -87,7 +102,7 @@ BEGIN
         END;
 
         -- Lấy khách hàng tiếp theo
-        FETCH NEXT FROM KhachHangSNCursor INTO @SoDienThoai, @NgaySinh, @MucKHTT;
+        FETCH NEXT FROM KhachHangSNCursor INTO @SoDienThoai, @NgaySinh;
     END;
 
     -- Đóng và giải phóng cursor
@@ -99,7 +114,6 @@ BEGIN
     SET NOCOUNT OFF;
 END
 GO
-
 
 
 --Cập nhật hạng khách hàng thân thiết
@@ -212,8 +226,8 @@ BEGIN
     END
 
 	UPDATE KHACHHANG  WITH (XLOCK)
-	SET SODIENTHOAI = @SoDienThoaiCu, TENKH  =@TenKHMoi
-	WHERE SODIENTHOAI = @SoDienThoaiMoi
+	SET SODIENTHOAI = @SoDienThoaiMoi, TENKH  =@TenKHMoi
+	WHERE SODIENTHOAI = @SoDienThoaiCu
 	
 	PRINT N'Cập nhật thông tin thành công!';
 		
@@ -223,50 +237,53 @@ END
 GO
 
 
---SP xóa tài khoản khách hàng CO LOCK
-CREATE PROC SP_XOATAIKHOAN_Lock
-	@SoDienThoai CHAR(10), @TenKH NVARCHAR(255), @NgaySinh DATE
+CREATE PROC SP_XOATAIKHOAN_LOCK
+    @SoDienThoai CHAR(10), @TenKH NVARCHAR(255), @NgaySinh DATE
 AS
 BEGIN
-	SET NOCOUNT ON;
+    SET NOCOUNT ON;
     BEGIN TRANSACTION;
-	SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
-	--Kiểm tra tài khoản tồn tại hay không
-	IF NOT EXISTS (SELECT 1 FROM KHACHHANG  WITH (ROWLOCK) WHERE SODIENTHOAI = @SoDienThoai	AND NGAYSINH = @NgaySinh AND TENKH = @TenKH)
-	BEGIN
-		RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16,1);
-		RETURN;
-	END
+    SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 
-	-- Kiểm tra các mối quan hệ liên quan (nếu có)
-    IF EXISTS (
-        SELECT 1 
-        FROM LSMUAHANG  WITH (ROWLOCK)
-        WHERE SODIENTHOAI = @SoDienThoai
-    )
-    BEGIN
-        RAISERROR (N'Không thể xóa tài khoản vì đã có lịch sử mua hàng!', 16, 1);
-        RETURN;
-    END
-	--Kiểm tra các mối quan hệ liên quan trong phiếu mua hàng
-	IF EXISTS (
-        SELECT 1 
-        FROM PHIEUMUAHANG  WITH (ROWLOCK)
-        WHERE SODIENTHOAI = @SoDienThoai
-    )
-    BEGIN
-        RAISERROR (N'Không thể xóa tài khoản vì đã có phiếu mua hàng!', 16, 1);
-        RETURN;
-    END
+    BEGIN TRY
+        -- Kiểm tra tài khoản tồn tại
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM KHACHHANG WITH (UPDLOCK, ROWLOCK)
+            WHERE SODIENTHOAI = @SoDienThoai AND NGAYSINH = @NgaySinh AND TENKH = @TenKH
+        )
+        BEGIN
+            RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
 
-	DELETE FROM KHACHHANG  WITH (XLOCK)
-	WHERE SODIENTHOAI = @SoDienThoai
+        -- Kiểm tra phiếu mua hàng
+        IF EXISTS (
+            SELECT 1 
+            FROM PHIEUMUAHANG WITH (UPDLOCK, ROWLOCK)
+            WHERE SODIENTHOAI = @SoDienThoai
+        )
+        BEGIN
+            RAISERROR (N'Không thể xóa tài khoản vì đã có phiếu mua hàng!', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
 
-	PRINT N'Xóa tài khoản thành công!';
+        -- Xóa khách hàng
+        DELETE FROM KHACHHANG WITH (XLOCK)
+        WHERE SODIENTHOAI = @SoDienThoai;
 
-	COMMIT TRANSACTION;
+        PRINT N'Xóa tài khoản thành công!';
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
     SET NOCOUNT OFF;
-END
+END;
 GO
 
 

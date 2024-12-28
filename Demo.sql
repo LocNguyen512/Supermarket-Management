@@ -16,9 +16,8 @@ BEGIN
     DECLARE @SoDienThoai CHAR(10);
     DECLARE @NgaySinh DATE;
     DECLARE @MucKHTT NVARCHAR(10);
-    DECLARE @NgayBatDau DATE = GETDATE();
+    DECLARE @NgayBatDau DATE = '2024-01-01';
     DECLARE @NgayKetThuc DATE = DATEADD(DAY, 30, @NgayBatDau); 
-    DECLARE @MaPhieu NVARCHAR(50);
 
     -- Cursor để duyệt qua khách hàng
     DECLARE KhachHangSNCursor CURSOR FOR
@@ -34,27 +33,43 @@ BEGIN
         --Kiểm tra số điện thoại khách hàng này có tồn tại không
 		IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
 		BEGIN
-			RAISERROR (N'Không tìm thấy số điện thoại này trong dữ liệu khách hàng',16,1);
+			RAISERROR (N'Không tìm thấy dữ liệu khách hàng này hehe',16,1);
+			CLOSE KhachHangSNCursor;
+			DEALLOCATE KhachHangSNCursor;
 			RETURN;
+			
 		END;
-		
+		WAITFOR DELAY '00:00:10';
         -- Kiểm tra ngày sinh có nằm trong khoảng từ ngày hiện tại đến cuối tháng tiếp theo
+		
+
         IF CONVERT(VARCHAR(5), @NgaySinh, 110) BETWEEN 
            CONVERT(VARCHAR(5), @NgayBatDau, 110) AND 
-           CONVERT(VARCHAR(5), DATEADD(MONTH, 1, @NgayBatDau), 110)
-        BEGIN
-            -- Tạo mã phiếu duy nhất
-            WHILE 1 = 1
-            BEGIN
-                SET @MaPhieu = CAST(NEWID() AS NVARCHAR(50));
+           CONVERT(VARCHAR(5), @NgayKetThuc, 110)
 
-                -- Kiểm tra nếu mã đã tồn tại
-                IF NOT EXISTS (SELECT 1 FROM PHIEUMUAHANG WHERE MAPHIEUMUAHANG = @MaPhieu)
-                    BREAK; -- Thoát vòng lặp nếu mã là duy nhất
+        BEGIN
+			DECLARE @MaPhieu NVARCHAR(8);
+			DECLARE @LastMaPhieu NVARCHAR(8);
+			DECLARE @NextId INT;
+            -- Tạo mã phiếu duy nhất
+            SELECT TOP 1 @LastMaPhieu = MAPHIEUMUAHANG
+            FROM PHIEUMUAHANG
+            ORDER BY MAPHIEUMUAHANG DESC;
+
+            -- Tạo mã phiếu mua hàng mới
+            IF @LastMaPhieu IS NULL
+            BEGIN
+                SET @MaPhieu = 'PMH00001'; -- Nếu không có mã nào, bắt đầu từ PMH00001
+            END
+            ELSE
+            BEGIN
+                SET @NextId = CAST(SUBSTRING(@LastMaPhieu, 4, LEN(@LastMaPhieu) - 3) AS INT) + 1;
+                SET @MaPhieu = 'PMH' + RIGHT('00000' + CAST(@NextId AS NVARCHAR), 5);
+      
             END;
 			
 			
-			WAITFOR DELAY '00:00:10';
+			
 
 			--(chổ này) đọc lấy mã khtt của khách hàng
 			IF EXISTS (SELECT MUCKHTT FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
@@ -64,6 +79,8 @@ BEGIN
 			ELSE 
 			BEGIN
 				RAISERROR (N'Không tìm thấy dữ liệu khách hàng này hehe',16,1);
+				CLOSE KhachHangSNCursor;
+				DEALLOCATE KhachHangSNCursor;
 				RETURN;
 			END
 
@@ -84,9 +101,9 @@ BEGIN
                     ELSE 50000
                 END,1);
         END;
-
+		
         -- Lấy khách hàng tiếp theo
-        FETCH NEXT FROM KhachHangSNCursor INTO @SoDienThoai, @NgaySinh, @MucKHTT;
+        FETCH NEXT FROM KhachHangSNCursor INTO @SoDienThoai, @NgaySinh;
     END;
 
     -- Đóng và giải phóng cursor
@@ -273,6 +290,17 @@ BEGIN
         RAISERROR (N'Không thể xóa tài khoản vì đã có lịch sử mua hàng!', 16, 1);
         RETURN;
     END
+	-- Kiểm tra các mối quan hệ liên quan (nếu có)
+    IF EXISTS (
+        SELECT 1 
+        FROM PHIEUMUAHANG
+        WHERE SODIENTHOAI = @SoDienThoai
+    )
+    BEGIN
+        RAISERROR (N'Không thể xóa tài khoản vì đã có phiếu mua hàng!', 16, 1);
+        RETURN;
+    END
+
 	DELETE FROM KHACHHANG
 	WHERE SODIENTHOAI = @SoDienThoai
 
