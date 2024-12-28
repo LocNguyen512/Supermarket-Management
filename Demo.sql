@@ -470,7 +470,7 @@ BEGIN
     -- Thêm khuyến mãi vào bảng KHUYENMAI
     INSERT INTO KHUYENMAI (MAKHUYENMAI, MALOAIKHUYENMAI, TYLEGIAM, NGAYBATDAU, NGAYKETTHUC, SOLUONGTOIDA)
     VALUES (@MAKHUYENMAI, @MALOAIKHUYENMAI, @TYLEGIAM, @NGAYBATDAU, @NGAYKETTHUC, @SOLUONGTOIDA);
-
+	waitfor delay '00:00:10' 
     -- Xử lý từng loại khuyến mãi
     IF @MALOAIKHUYENMAI = '3' -- MEMBER-SALE
     BEGIN
@@ -845,7 +845,7 @@ BEGIN
 						WHERE KM.MALOAIKHUYENMAI = 3
 							AND KM.NGAYBATDAU <= GETDATE()
 							AND KM.NGAYKETTHUC >= GETDATE()
-							AND SP1.SLAPDUNG > 0 AND SP2.SLAPDUNG > 0
+							AND KM.SOLUONGTOIDA > 0
 							AND KM.TYLEGIAM = ( -- Chọn mức giảm giá cao nhất
 								SELECT MAX(KM2.TYLEGIAM)
 								FROM KHUYENMAI AS KM2
@@ -972,7 +972,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- In hoặc xử lý dữ liệu (ở đây là in ra màn hình)
-        PRINT 'Mã sản phẩm: ' + @MASP + ', Tên sản phẩm: ' + @TENSP + ', Số lượng tồn: ' + CAST(@SOLUONGTON AS NVARCHAR)
+        PRINT N'Mã sản phẩm: ' + @MASP + N', Tên sản phẩm: ' + @TENSP + N', Số lượng tồn: ' + CAST(@SOLUONGTON AS NVARCHAR)
 
         -- Lấy bản ghi tiếp theo
         FETCH NEXT FROM ProductCursor INTO @MASP, @TENSP, @SOLUONGTON
@@ -981,8 +981,7 @@ BEGIN
     -- Đóng con trỏ và giải phóng tài nguyên
     CLOSE ProductCursor
     DEALLOCATE ProductCursor
-
-    -- Hoàn tất giao dịch
+	WAITFOR DELAY '00:00:10'; -- Giữ transaction mở để kiểm tra phantom read.
 END
 GO
 
@@ -994,20 +993,20 @@ CREATE PROCEDURE SP_THEM_DONDATHANG
     @SL_DAT INT
 AS
 BEGIN
-    BEGIN TRANSACTION;
+    
     BEGIN TRY
         -- Kiểm tra sản phẩm có tồn tại
         IF NOT EXISTS (SELECT 1 FROM SANPHAM WHERE MASP = @MASP)
         BEGIN
             PRINT N'Lỗi: Sản phẩm không tồn tại!';
-            ROLLBACK TRANSACTION;
+            
             RETURN;
         END
         -- Kiểm tra nhà sản xuất có tồn tại
         IF NOT EXISTS (SELECT 1 FROM NHASX WHERE MANSX = @MANSX)
         BEGIN
             PRINT N'Lỗi: Nhà sản xuất không tồn tại!';
-            ROLLBACK TRANSACTION;
+            
             RETURN;
         END
         -- Kiểm tra số lượng đặt
@@ -1016,7 +1015,7 @@ BEGIN
         IF @SL_DAT < (@SLSPTD * 0.1)
         BEGIN
             PRINT N'Lỗi: Số lượng đặt phải lớn hơn hoặc bằng 10% SL-SP-TĐ!';
-            ROLLBACK TRANSACTION;
+            
             RETURN;
         END
 
@@ -1026,12 +1025,12 @@ BEGIN
 
         -- Xác nhận thành công
         PRINT N'Thêm đơn đặt hàng thành công!';
-        COMMIT TRANSACTION;
+        
     END TRY
     BEGIN CATCH
         -- Xử lý lỗi
         PRINT N'Lỗi xảy ra: ' + ERROR_MESSAGE();
-        ROLLBACK TRANSACTION;
+        
     END CATCH
 END
 GO
@@ -1045,15 +1044,12 @@ CREATE PROCEDURE SP_THEM_NHANHANG
     @NGAYNHAN DATE
 AS
 BEGIN
-    BEGIN TRANSACTION;
-
     BEGIN TRY
-
         -- Kiểm tra mã đơn hàng (MADDH) có tồn tại trong bảng DONDATHANG không
         IF NOT EXISTS (SELECT 1 FROM DONDATHANG WHERE MADDH = @MADDH)
         BEGIN
             RAISERROR ('Mã đơn đặt hàng không tồn tại.', 16, 1);
-            ROLLBACK TRANSACTION;
+            
             RETURN;
         END
 
@@ -1061,7 +1057,7 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM SANPHAM WHERE MASP = @MASP)
         BEGIN
             RAISERROR ('Mã sản phẩm không tồn tại.', 16, 1);
-            ROLLBACK TRANSACTION;
+            
             RETURN;
         END
 
@@ -1069,7 +1065,7 @@ BEGIN
         IF @SL_NHAN <= 0
         BEGIN
             RAISERROR ('Số lượng nhận phải lớn hơn 0.', 16, 1);
-            ROLLBACK TRANSACTION;
+            
             RETURN;
         END
 
@@ -1082,7 +1078,7 @@ BEGIN
         IF @SL_NHAN > @SL_DAT
         BEGIN
             RAISERROR ('Số lượng nhận vượt quá số lượng đặt.', 16, 1);
-            ROLLBACK TRANSACTION;
+            
             RETURN;
         END
 
@@ -1121,13 +1117,13 @@ BEGIN
         -- Thông báo thêm nhận hàng thành công
         PRINT 'Thêm nhận hàng thành công.';
 
-        COMMIT TRANSACTION;
+        
 
     END TRY
     BEGIN CATCH
         -- Xử lý lỗi
         PRINT ERROR_MESSAGE();
-        ROLLBACK TRANSACTION;
+        
     END CATCH
 END
 GO
@@ -1136,75 +1132,89 @@ GO
 CREATE PROCEDURE SP_TINHTOAN_SOLUONGDATHANG
 AS
 BEGIN
-    BEGIN TRANSACTION;
-    DECLARE @MASP INT, @SL_TON INT, @SL_SP_TD INT, @SL_DA_DAT INT, @SL_GIAO_THIEU INT, @SL_DAT INT;
+    -- Khai báo Cursor
+    DECLARE @MASP INT;
+    DECLARE @TENSP NVARCHAR(255);
+    DECLARE @SL_SP_TD INT;
+    DECLARE @SOLUONGTON INT;
+    DECLARE @SL_DA_DAT INT = 0;
+    DECLARE @SL_GIAO_THIEU INT = 0;
+    DECLARE @SL_DAT INT = 0;
 
-    -- Khai báo con trỏ để duyệt qua từng sản phẩm trong bảng SANPHAM
-    DECLARE product_cursor CURSOR FOR
-    SELECT MASP, SOLUONGTON, SLSPTD
+    -- Cursor chọn các sản phẩm cần tính toán
+    DECLARE SANPHAM_CURSOR CURSOR FAST_FORWARD FOR
+    SELECT MASP, TENSP, SLSPTD, SOLUONGTON
     FROM SANPHAM;
 
-    OPEN product_cursor;
-    FETCH NEXT FROM product_cursor INTO @MASP, @SL_TON, @SL_SP_TD;
+    -- Mở Cursor
+    OPEN SANPHAM_CURSOR;
+
+    FETCH NEXT FROM SANPHAM_CURSOR INTO @MASP, @TENSP, @SL_SP_TD, @SOLUONGTON;
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        -- Tính số lượng đã đặt nhưng chưa giao (SL_DA_DAT)
+        -- Bắt đầu giao dịch cho từng sản phẩm
+        BEGIN TRANSACTION;
+        
+
+        -- Tính số lượng đã đặt nhưng chưa giao
         SELECT @SL_DA_DAT = ISNULL(SUM(SL_DAT), 0)
         FROM DONDATHANG
-        WHERE MASP = @MASP AND TRANGTHAI = N'Đang xử lý';
+        WHERE MASP = @MASP AND TRANGTHAI = 'Đang xử lý';
 
-        -- Tính số lượng giao thiếu (SL_GIAO_THIEU)
-        SELECT @SL_GIAO_THIEU = ISNULL(SUM(DDH.SL_DAT - NH.SL_NHAN), 0)
+        -- Tính số lượng giao thiếu
+        SELECT @SL_GIAO_THIEU = ISNULL(SUM(SL_DAT - NH.SL_NHAN), 0)
         FROM DONDATHANG DDH
-		JOIN NHANHANG NH ON DDH.MADDH = NH.MADDH
-        WHERE MASP = @MASP AND TRANGTHAI = N'Giao thiếu';
+        LEFT JOIN NHANHANG NH ON DDH.MADDH = NH.MADDH
+        WHERE DDH.MASP = @MASP AND DDH.TRANGTHAI = 'Giao thiếu';
 
-        -- Tính số lượng cần đặt (SL_DAT)
-        SET @SL_DAT = @SL_SP_TD - (@SL_TON + @SL_DA_DAT + @SL_GIAO_THIEU);
+        -- Tính số lượng cần đặt
+        SET @SL_DAT = @SL_SP_TD - (@SOLUONGTON + @SL_DA_DAT) + @SL_GIAO_THIEU;
 
-        -- Kiểm tra các điều kiện của số lượng đặt
-        IF @SL_TON < @SL_SP_TD * 0.7 AND @SL_DAT >= @SL_SP_TD * 0.1
+        -- Kiểm tra điều kiện đặt hàng
+        IF (@SOLUONGTON < 0.7 * @SL_SP_TD AND @SL_DAT >= 0.1 * @SL_SP_TD)
         BEGIN
-            IF @SL_DAT + @SL_TON <= @SL_SP_TD
+            IF (@SL_DAT + @SOLUONGTON <= @SL_SP_TD)
             BEGIN
-                -- Trả về số lượng cần đặt cho sản phẩm này
-                PRINT 'Sản phẩm ' + CAST(@MASP AS VARCHAR) + ' cần đặt: ' + CAST(@SL_DAT AS VARCHAR);
-				-- Chỗ này có thể gọi SP_THEM_DONDATHANG luôn
+                PRINT 'Sản phẩm: ' + @TENSP + ' - Số lượng cần đặt: ' + CAST(@SL_DAT AS NVARCHAR(50));
             END
         END
 
-        FETCH NEXT FROM product_cursor INTO @MASP, @SL_TON, @SL_SP_TD;
+        -- Kết thúc giao dịch
+        COMMIT;
+
+        -- Lấy sản phẩm tiếp theo
+        FETCH NEXT FROM SANPHAM_CURSOR INTO @MASP, @TENSP, @SL_SP_TD, @SOLUONGTON;
     END
 
-    CLOSE product_cursor;
-    DEALLOCATE product_cursor;
-
-    COMMIT TRANSACTION;
+    -- Đóng và hủy Cursor
+    CLOSE SANPHAM_CURSOR;
+    DEALLOCATE SANPHAM_CURSOR;
 END;
 GO
 
+
 -- Xem lịch sử nhập hàng của 1 sản phẩm cụ thể
-CREATE PROCEDURE SP_XemLichSuNhapHang
+CREATE PROCEDURE  SP_XemLichSuNhapHang
     @MASP INT
 AS
 BEGIN
-	BEGIN TRANSACTION;
+	
     SELECT MADDH, NGAYDATHANG, SL_DAT, TRANGTHAI
     FROM DONDATHANG
     WHERE MASP = @MASP
     ORDER BY NGAYDATHANG DESC;
-	COMMIT TRANSACTION;
+	
     PRINT N'Tra cứu lịch sử nhập hàng thành công!';
 END;
 GO
 
 -- Hủy đơn đặt hàng
-CREATE PROCEDURE SP_HuyDonDatHang
+CREATE PROCEDURE  SP_HuyDonDatHang
     @MADDH INT
 AS
 BEGIN
-    BEGIN TRANSACTION;
+    
     BEGIN TRY
         -- Kiểm tra trạng thái
         DECLARE @TRANGTHAI NVARCHAR(50);
@@ -1213,7 +1223,7 @@ BEGIN
         IF @TRANGTHAI = N'Hoàn thành'
         BEGIN
             PRINT N'Lỗi: Không thể xóa đơn đặt hàng đã hoàn thành!';
-            ROLLBACK TRANSACTION;
+            
             RETURN;
         END
 
@@ -1221,14 +1231,40 @@ BEGIN
         DELETE FROM DONDATHANG WHERE MADDH = @MADDH;
 
         PRINT N'Xóa đơn đặt hàng thành công!';
-        COMMIT TRANSACTION;
+        
     END TRY
     BEGIN CATCH
         PRINT N'Lỗi xảy ra: ' + ERROR_MESSAGE();
-        ROLLBACK TRANSACTION;
+        
     END CATCH
 END;
 GO
+
+/*
+-- LỖI PHANTOM--
+-- TÌNH HUỐNG 1
+INSERT INTO DANHMUC
+VALUES (1, N'ABC'), (2, N'DEF')
+GO
+INSERT INTO NHASX
+VALUES (1, N'CONG TY 1', '0123455111')
+
+INSERT INTO SANPHAM (MASP, TENSP, MOTA, MANSX, GIA, MADANHMUC, SLSPTD, SOLUONGTON)
+VALUES 
+(1, N'Sản phẩm A', N'Mô tả sản phẩm A', 1, 1, 1, 100, 50),
+(2, N'Sản phẩm B', N'Mô tả sản phẩm B', 1, 0, 2, 150, 75);
+TẠO SESSION 2 VÀ CHẠY CODE DƯỚI
+EXEC SP_KIEMTRA_TONKHO;
+EXEC SP_THEM_SAN_PHAM 
+    @MASP = 51,
+    @TENSP = N'Sản phẩm mới',
+    @MOTA = N'Mô tả sản phẩm mới',
+    @TENNSX = N'Nokia',
+    @GIA = 150000,
+    @TENDANHMUC = N'Điện tử',
+    @SLSPTD = 120,
+    @SLTK = 60;
+*/
 
 -------------------------------------------------------------------------------------------------------
 /*BỘ PHẬN KINH DOANH*/
@@ -1294,3 +1330,15 @@ BEGIN
     COMMIT TRANSACTION;
 END;
 GO
+/*LỖI LOST UPDATE*/
+
+/*LỖI PHANTOM READ*/
+
+-- TÌNH HUỐNG 3
+select* from SANPHAM
+EXEC SP_THEM_SAN_PHAM 1, N'Áo thun', N'100% cotton', 'SamSung', 100000, N'Thời trang', 500, 300
+EXEC SP_THEM_KHUYEN_MAI '14', 1, NULL, '1', 50,'2024-12-28','2024-12-30', 200, NULL
+EXEC SP_XOA_SAN_PHAM 2
+
+
+/*LỖI UNREPEATABLE READ*/

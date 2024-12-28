@@ -1130,7 +1130,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- In hoặc xử lý dữ liệu (ở đây là in ra màn hình)
-        PRINT 'Mã sản phẩm: ' + @MASP + ', Tên sản phẩm: ' + @TENSP + ', Số lượng tồn: ' + CAST(@SOLUONGTON AS NVARCHAR)
+        PRINT N'Mã sản phẩm: ' + @MASP + N', Tên sản phẩm: ' + @TENSP + N', Số lượng tồn: ' + CAST(@SOLUONGTON AS NVARCHAR)
 
         -- Lấy bản ghi tiếp theo
         FETCH NEXT FROM ProductCursor INTO @MASP, @TENSP, @SOLUONGTON
@@ -1141,13 +1141,14 @@ BEGIN
     DEALLOCATE ProductCursor
 
     -- Hoàn tất giao dịch
-    COMMIT
+	WAITFOR DELAY '00:00:10'; -- Giữ transaction mở để kiểm tra phantom read.
+    COMMIT TRANSACTION;
 END
 GO
 
 
 -- THÊM ĐƠN ĐẶT HÀNG
-CREATE PROCEDURE SP_THEM_DONDATHANG
+CREATE PROCEDURE  SP_THEM_DONDATHANG
     @MADDH INT,
     @MASP INT,
     @MANSX INT,
@@ -1212,9 +1213,8 @@ END
 GO
 
 
-
 -- THÊM VÀO BẢNG NHẬN HÀNG
-CREATE PROCEDURE SP_THEM_NHANHANG
+CREATE PROCEDURE  SP_THEM_NHANHANG
     @MADDH INT,
     @MASP INT,
     @SL_NHAN INT,
@@ -1316,60 +1316,95 @@ GO
 
 
 -- TÍNH TOÁN SỐ HÀNG CẦN ĐẶT CHO CÁC SẢN PHẨM
+-- TÍNH TOÁN SỐ HÀNG CẦN ĐẶT CHO CÁC SẢN PHẨM
 CREATE PROCEDURE SP_TINHTOAN_SOLUONGDATHANG
 AS
 BEGIN
-    BEGIN TRANSACTION;
-    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+    -- Khai báo Cursor
+    DECLARE @MASP INT;
+    DECLARE @TENSP NVARCHAR(255);
+    DECLARE @SL_SP_TD INT;
+    DECLARE @SOLUONGTON INT;
+    DECLARE @SL_DA_DAT INT = 0;
+    DECLARE @SL_GIAO_THIEU INT = 0;
+    DECLARE @SL_DAT INT = 0;
 
-    DECLARE @MASP INT, @SL_TON INT, @SL_SP_TD INT, @SL_DA_DAT INT, @SL_GIAO_THIEU INT, @SL_DAT INT;
+    -- Cursor chọn các sản phẩm cần tính toán
+    DECLARE SANPHAM_CURSOR CURSOR FAST_FORWARD FOR
+    SELECT MASP, TENSP, SLSPTD, SOLUONGTON
+    FROM SANPHAM;
 
-    -- Khai báo con trỏ để duyệt qua từng sản phẩm trong bảng SANPHAM
-    DECLARE product_cursor CURSOR FOR
-    SELECT MASP, SOLUONGTON, SLSPTD
-    FROM SANPHAM WITH (HOLDLOCK);
+    -- Mở Cursor
+    OPEN SANPHAM_CURSOR;
 
-    OPEN product_cursor;
-    FETCH NEXT FROM product_cursor INTO @MASP, @SL_TON, @SL_SP_TD;
+    FETCH NEXT FROM SANPHAM_CURSOR INTO @MASP, @TENSP, @SL_SP_TD, @SOLUONGTON;
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        -- Tính số lượng đã đặt nhưng chưa giao (SL_DA_DAT)
+        -- Bắt đầu giao dịch cho từng sản phẩm
+        BEGIN TRANSACTION;
+        SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+
+        -- Tính số lượng đã đặt nhưng chưa giao
         SELECT @SL_DA_DAT = ISNULL(SUM(SL_DAT), 0)
-        FROM DONDATHANG WITH (UPDLOCK)
-        WHERE MASP = @MASP AND TRANGTHAI = N'Đang xử lý';
+        FROM DONDATHANG
+        WHERE MASP = @MASP AND TRANGTHAI = 'Đang xử lý';
 
-        -- Tính số lượng giao thiếu (SL_GIAO_THIEU)
-        SELECT @SL_GIAO_THIEU = ISNULL(SUM(DDH.SL_DAT - NH.SL_NHAN), 0)
-        FROM DONDATHANG DDH WITH (UPDLOCK)
-        JOIN NHANHANG NH WITH (UPDLOCK) ON DDH.MADDH = NH.MADDH
-        WHERE DDH.MASP = @MASP AND DDH.TRANGTHAI = N'Giao thiếu';
+        -- Tính số lượng giao thiếu
+        SELECT @SL_GIAO_THIEU = ISNULL(SUM(SL_DAT - NH.SL_NHAN), 0)
+        FROM DONDATHANG DDH
+        LEFT JOIN NHANHANG NH ON DDH.MADDH = NH.MADDH
+        WHERE DDH.MASP = @MASP AND DDH.TRANGTHAI = 'Giao thiếu';
 
-        -- Tính số lượng cần đặt (SL_DAT)
-        SET @SL_DAT = @SL_SP_TD - (@SL_TON + @SL_DA_DAT + @SL_GIAO_THIEU);
+        -- Tính số lượng cần đặt
+        SET @SL_DAT = @SL_SP_TD - (@SOLUONGTON + @SL_DA_DAT) + @SL_GIAO_THIEU;
 
-        -- Kiểm tra các điều kiện của số lượng đặt
-        IF @SL_TON < @SL_SP_TD * 0.7 AND @SL_DAT >= @SL_SP_TD * 0.1
+        -- Kiểm tra điều kiện đặt hàng
+        IF (@SOLUONGTON < 0.7 * @SL_SP_TD AND @SL_DAT >= 0.1 * @SL_SP_TD)
         BEGIN
-            IF @SL_DAT + @SL_TON <= @SL_SP_TD
+            IF (@SL_DAT + @SOLUONGTON <= @SL_SP_TD)
             BEGIN
-                -- Trả về số lượng cần đặt cho sản phẩm này
-                PRINT 'Sản phẩm ' + CAST(@MASP AS VARCHAR) + ' cần đặt: ' + CAST(@SL_DAT AS VARCHAR);
-                -- Gọi SP_THEM_DONDATHANG nếu cần
-                -- EXEC SP_THEM_DONDATHANG @MADDH, @MASP, ..., @SL_DAT
+                PRINT 'Sản phẩm: ' + @TENSP + ' - Số lượng cần đặt: ' + CAST(@SL_DAT AS NVARCHAR(50));
             END
         END
 
-        FETCH NEXT FROM product_cursor INTO @MASP, @SL_TON, @SL_SP_TD;
+        -- Kết thúc giao dịch
+        COMMIT;
+
+        -- Lấy sản phẩm tiếp theo
+        FETCH NEXT FROM SANPHAM_CURSOR INTO @MASP, @TENSP, @SL_SP_TD, @SOLUONGTON;
     END
 
-    CLOSE product_cursor;
-    DEALLOCATE product_cursor;
-
-    COMMIT;
+    -- Đóng và hủy Cursor
+    CLOSE SANPHAM_CURSOR;
+    DEALLOCATE SANPHAM_CURSOR;
 END;
 GO
+/*
+-- GIẢI QUYẾT LỖI PHANTOM--
+-- TÌNH HUỐNG 1
+INSERT INTO DANHMUC
+VALUES (1, N'ABC'), (2, N'DEF')
+GO
+INSERT INTO NHASX
+VALUES (1, N'CONG TY 1', '0123455111')
 
+INSERT INTO SANPHAM (MASP, TENSP, MOTA, MANSX, GIA, MADANHMUC, SLSPTD, SOLUONGTON)
+VALUES 
+(1, N'Sản phẩm A', N'Mô tả sản phẩm A', 1, 1, 1, 100, 50),
+(2, N'Sản phẩm B', N'Mô tả sản phẩm B', 1, 0, 2, 150, 75);
+TẠO SESSION 2 VÀ CHẠY CODE DƯỚI
+EXEC SP_KIEMTRA_TONKHO;
+EXEC SP_THEM_SAN_PHAM 
+    @MASP = 51,
+    @TENSP = N'Sản phẩm mới',
+    @MOTA = N'Mô tả sản phẩm mới',
+    @TENNSX = N'Nokia',
+    @GIA = 150000,
+    @TENDANHMUC = N'Điện tử',
+    @SLSPTD = 120,
+    @SLTK = 60;
+*/
 
 
 
