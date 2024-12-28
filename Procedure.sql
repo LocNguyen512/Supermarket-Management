@@ -1037,12 +1037,43 @@ GO
 CREATE PROCEDURE SP_KIEMTRA_TONKHO
 AS
 BEGIN
-	BEGIN TRANSACTION;
-	SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+    -- Bắt đầu giao dịch
+    BEGIN TRANSACTION
+    -- Thiết lập mức độ cách ly cao nhất
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE
+
+    -- Khai báo các biến để lưu dữ liệu từ con trỏ
+    DECLARE @MASP NVARCHAR(50)
+    DECLARE @TENSP NVARCHAR(255)
+    DECLARE @SOLUONGTON INT
+
+    -- Khai báo con trỏ
+    DECLARE ProductCursor CURSOR FOR
     SELECT MASP, TENSP, SOLUONGTON
     FROM SANPHAM
-    ORDER BY MASP;
-	COMMIT TRANSACTION;
+
+    -- Mở con trỏ
+    OPEN ProductCursor
+
+    -- Lấy dữ liệu đầu tiên từ con trỏ
+    FETCH NEXT FROM ProductCursor INTO @MASP, @TENSP, @SOLUONGTON
+
+    -- Vòng lặp duyệt qua từng bản ghi
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- In hoặc xử lý dữ liệu (ở đây là in ra màn hình)
+        PRINT 'Mã sản phẩm: ' + @MASP + ', Tên sản phẩm: ' + @TENSP + ', Số lượng tồn: ' + CAST(@SOLUONGTON AS NVARCHAR)
+
+        -- Lấy bản ghi tiếp theo
+        FETCH NEXT FROM ProductCursor INTO @MASP, @TENSP, @SOLUONGTON
+    END
+
+    -- Đóng con trỏ và giải phóng tài nguyên
+    CLOSE ProductCursor
+    DEALLOCATE ProductCursor
+
+    -- Hoàn tất giao dịch
+    COMMIT
 END
 GO
 
