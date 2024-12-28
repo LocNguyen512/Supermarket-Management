@@ -1047,10 +1047,10 @@ BEGIN
     DECLARE @TENSP NVARCHAR(255)
     DECLARE @SOLUONGTON INT
 
-    -- Khai báo con trỏ
-    DECLARE ProductCursor CURSOR FOR
+    -- Khai báo con trỏ với khóa để đảm bảo dữ liệu không thay đổi trong khi duyệt
+    DECLARE ProductCursor CURSOR LOCAL STATIC READ_ONLY FORWARD_ONLY FOR
     SELECT MASP, TENSP, SOLUONGTON
-    FROM SANPHAM
+    FROM SANPHAM WITH (HOLDLOCK, UPDLOCK)
 
     -- Mở con trỏ
     OPEN ProductCursor
@@ -1077,6 +1077,7 @@ BEGIN
 END
 GO
 
+
 -- THÊM ĐƠN ĐẶT HÀNG
 CREATE PROCEDURE SP_THEM_DONDATHANG
     @MADDH INT,
@@ -1086,38 +1087,52 @@ CREATE PROCEDURE SP_THEM_DONDATHANG
 AS
 BEGIN
     BEGIN TRANSACTION;
-	SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+    SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
     BEGIN TRY
-        -- Kiểm tra sản phẩm có tồn tại
-        IF NOT EXISTS (SELECT 1 FROM SANPHAM WHERE MASP = @MASP)
+        -- Kiểm tra sản phẩm có tồn tại (thiết lập khóa để ngăn việc xóa hoặc sửa đổi sản phẩm)
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM SANPHAM WITH (HOLDLOCK, UPDLOCK) 
+            WHERE MASP = @MASP
+        )
         BEGIN
-            PRINT N'Lỗi: Sản phẩm không tồn tại!';
-            ROLLBACK TRANSACTION;
-            RETURN;
-        END
-        -- Kiểm tra nhà sản xuất có tồn tại
-        IF NOT EXISTS (SELECT 1 FROM NHASX WHERE MANSX = @MANSX)
-        BEGIN
-            PRINT N'Lỗi: Nhà sản xuất không tồn tại!';
-            ROLLBACK TRANSACTION;
-            RETURN;
-        END
-        -- Kiểm tra số lượng đặt
-        DECLARE @SLSPTD INT;
-        SELECT @SLSPTD = SLSPTD FROM SANPHAM WHERE MASP = @MASP;
-        IF @SL_DAT < (@SLSPTD * 0.1)
-        BEGIN
-            PRINT N'Lỗi: Số lượng đặt phải lớn hơn hoặc bằng 10% SL-SP-TĐ!';
+            PRINT N'Lỗi: Sản phẩm không tồn tại với MASP = ' + CAST(@MASP AS NVARCHAR);
             ROLLBACK TRANSACTION;
             RETURN;
         END
 
-        -- Thêm đơn đặt hàng mới
+        -- Kiểm tra nhà sản xuất có tồn tại (thiết lập khóa để ngăn việc xóa hoặc sửa đổi nhà sản xuất)
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM NHASX WITH (HOLDLOCK, UPDLOCK) 
+            WHERE MANSX = @MANSX
+        )
+        BEGIN
+            PRINT N'Lỗi: Nhà sản xuất không tồn tại với MANSX = ' + CAST(@MANSX AS NVARCHAR);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- Kiểm tra số lượng đặt (khóa để ngăn thay đổi số lượng tồn định trong khi giao dịch đang diễn ra)
+        DECLARE @SLSPTD INT;
+        SELECT @SLSPTD = SLSPTD 
+        FROM SANPHAM WITH (HOLDLOCK, UPDLOCK) 
+        WHERE MASP = @MASP;
+
+        IF @SL_DAT < (@SLSPTD * 0.1)
+        BEGIN
+            PRINT N'Lỗi: Số lượng đặt phải lớn hơn hoặc bằng 10% của SL-SP-TĐ (' 
+                  + CAST(@SLSPTD AS NVARCHAR) + N')!';
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- Thêm đơn đặt hàng mới (không cần khóa bổ sung ở đây vì dữ liệu mới không gây xung đột)
         INSERT INTO DONDATHANG (MADDH, MASP, NGAYDATHANG, TRANGTHAI, SL_DAT, MANSX)
         VALUES (@MADDH, @MASP, GETDATE(), N'Đang xử lý', @SL_DAT, @MANSX);
 
         -- Xác nhận thành công
-        PRINT N'Thêm đơn đặt hàng thành công!';
+        PRINT N'Thêm đơn đặt hàng thành công với MADDH = ' + CAST(@MADDH AS NVARCHAR) + N'!';
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
@@ -1127,6 +1142,7 @@ BEGIN
     END CATCH
 END
 GO
+
 
 
 -- THÊM VÀO BẢNG NHẬN HÀNG
@@ -1140,18 +1156,26 @@ BEGIN
     BEGIN TRANSACTION;
 
     BEGIN TRY
-		SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+        SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 
-        -- Kiểm tra mã đơn hàng (MADDH) có tồn tại trong bảng DONDATHANG không
-        IF NOT EXISTS (SELECT 1 FROM DONDATHANG WHERE MADDH = @MADDH)
+        -- Kiểm tra mã đơn hàng (MADDH)
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM DONDATHANG WITH (HOLDLOCK) 
+            WHERE MADDH = @MADDH
+        )
         BEGIN
             RAISERROR ('Mã đơn đặt hàng không tồn tại.', 16, 1);
             ROLLBACK TRANSACTION;
             RETURN;
         END
 
-        -- Kiểm tra mã sản phẩm (MASP) có tồn tại trong bảng SANPHAM không
-        IF NOT EXISTS (SELECT 1 FROM SANPHAM WHERE MASP = @MASP)
+        -- Kiểm tra mã sản phẩm (MASP)
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM SANPHAM WITH (HOLDLOCK) 
+            WHERE MASP = @MASP
+        )
         BEGIN
             RAISERROR ('Mã sản phẩm không tồn tại.', 16, 1);
             ROLLBACK TRANSACTION;
@@ -1169,7 +1193,7 @@ BEGIN
         -- Kiểm tra SL_NHAN <= SL_DAT
         DECLARE @SL_DAT INT;
         SELECT @SL_DAT = SL_DAT 
-        FROM DONDATHANG 
+        FROM DONDATHANG WITH (UPDLOCK) 
         WHERE MADDH = @MADDH AND MASP = @MASP;
 
         IF @SL_NHAN > @SL_DAT
@@ -1183,39 +1207,36 @@ BEGIN
         INSERT INTO NHANHANG (MADDH, SL_NHAN, NGAYNHAN)
         VALUES (@MADDH, @SL_NHAN, @NGAYNHAN);
 
-        -- Cập nhật TRANGTHAI trong bảng DONDATHANG
-        -- Lấy tổng số lượng đã nhận cho mã đơn đặt hàng và sản phẩm này
+        -- Lấy tổng số lượng đã nhận
         DECLARE @TongSLNhan INT;
         SELECT @TongSLNhan = ISNULL(SUM(SL_NHAN), 0)
-        FROM NHANHANG NH
-		JOIN DONDATHANG DDH ON NH.MADDH = DDH.MADDH
+        FROM NHANHANG NH WITH (UPDLOCK)
+        JOIN DONDATHANG DDH WITH (UPDLOCK) ON NH.MADDH = DDH.MADDH
         WHERE NH.MADDH = @MADDH AND DDH.MASP = @MASP;
 
-        -- Nếu tổng SL_NHAN = SL_DAT, cập nhật trạng thái "Đã giao"
+        -- Cập nhật trạng thái đơn đặt hàng
         IF @TongSLNhan = @SL_DAT
         BEGIN
-            UPDATE DONDATHANG
+            UPDATE DONDATHANG WITH (UPDLOCK)
             SET TRANGTHAI = N'Đã giao'
             WHERE MADDH = @MADDH AND MASP = @MASP;
         END
-        -- Nếu tổng SL_NHAN < SL_DAT, cập nhật trạng thái "Giao thiếu"
         ELSE
         BEGIN
-            UPDATE DONDATHANG
+            UPDATE DONDATHANG WITH (UPDLOCK)
             SET TRANGTHAI = N'Giao thiếu'
             WHERE MADDH = @MADDH AND MASP = @MASP;
         END
 
-        -- Cập nhật SOLUONGTON trong bảng SANPHAM
-        UPDATE SANPHAM
+        -- Cập nhật số lượng tồn trong bảng SANPHAM
+        UPDATE SANPHAM WITH (UPDLOCK)
         SET SOLUONGTON = SOLUONGTON + @SL_NHAN
         WHERE MASP = @MASP;
 
-        -- Thông báo thêm nhận hàng thành công
+        -- Thông báo thành công
         PRINT 'Thêm nhận hàng thành công.';
 
         COMMIT TRANSACTION;
-
     END TRY
     BEGIN CATCH
         -- Xử lý lỗi
@@ -1225,18 +1246,20 @@ BEGIN
 END
 GO
 
+
 -- TÍNH TOÁN SỐ HÀNG CẦN ĐẶT CHO CÁC SẢN PHẨM
 CREATE PROCEDURE SP_TINHTOAN_SOLUONGDATHANG
 AS
 BEGIN
     BEGIN TRANSACTION;
-	SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+
     DECLARE @MASP INT, @SL_TON INT, @SL_SP_TD INT, @SL_DA_DAT INT, @SL_GIAO_THIEU INT, @SL_DAT INT;
 
     -- Khai báo con trỏ để duyệt qua từng sản phẩm trong bảng SANPHAM
     DECLARE product_cursor CURSOR FOR
     SELECT MASP, SOLUONGTON, SLSPTD
-    FROM SANPHAM;
+    FROM SANPHAM WITH (HOLDLOCK);
 
     OPEN product_cursor;
     FETCH NEXT FROM product_cursor INTO @MASP, @SL_TON, @SL_SP_TD;
@@ -1245,14 +1268,14 @@ BEGIN
     BEGIN
         -- Tính số lượng đã đặt nhưng chưa giao (SL_DA_DAT)
         SELECT @SL_DA_DAT = ISNULL(SUM(SL_DAT), 0)
-        FROM DONDATHANG
+        FROM DONDATHANG WITH (UPDLOCK)
         WHERE MASP = @MASP AND TRANGTHAI = N'Đang xử lý';
 
         -- Tính số lượng giao thiếu (SL_GIAO_THIEU)
         SELECT @SL_GIAO_THIEU = ISNULL(SUM(DDH.SL_DAT - NH.SL_NHAN), 0)
-        FROM DONDATHANG DDH
-		JOIN NHANHANG NH ON DDH.MADDH = NH.MADDH
-        WHERE MASP = @MASP AND TRANGTHAI = N'Giao thiếu';
+        FROM DONDATHANG DDH WITH (UPDLOCK)
+        JOIN NHANHANG NH WITH (UPDLOCK) ON DDH.MADDH = NH.MADDH
+        WHERE DDH.MASP = @MASP AND DDH.TRANGTHAI = N'Giao thiếu';
 
         -- Tính số lượng cần đặt (SL_DAT)
         SET @SL_DAT = @SL_SP_TD - (@SL_TON + @SL_DA_DAT + @SL_GIAO_THIEU);
@@ -1264,7 +1287,8 @@ BEGIN
             BEGIN
                 -- Trả về số lượng cần đặt cho sản phẩm này
                 PRINT 'Sản phẩm ' + CAST(@MASP AS VARCHAR) + ' cần đặt: ' + CAST(@SL_DAT AS VARCHAR);
-				-- Chỗ này có thể gọi SP_THEM_DONDATHANG luôn
+                -- Gọi SP_THEM_DONDATHANG nếu cần
+                -- EXEC SP_THEM_DONDATHANG @MADDH, @MASP, ..., @SL_DAT
             END
         END
 
@@ -1277,6 +1301,7 @@ BEGIN
     COMMIT;
 END;
 GO
+
 
 
 
