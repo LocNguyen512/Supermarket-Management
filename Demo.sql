@@ -219,7 +219,7 @@ AS
 BEGIN
 	SET NOCOUNT ON;
      
-	
+	--Kiểm tra có tài khoản nào ứng với thông tin đầu vào hay không
 	IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoaiCu	AND NGAYSINH = @NgaySinh AND TENKH = @TenKHCu)
 	BEGIN
 		RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16,1);
@@ -255,7 +255,7 @@ AS
 BEGIN
 	SET NOCOUNT ON;
      
-	
+	--Kiểm tra sdt đã được đăng kí trước đó chưa 
 	IF NOT EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai	AND NGAYSINH = @NgaySinh AND TENKH = @TenKH)
 	BEGIN
 		RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16,1);
