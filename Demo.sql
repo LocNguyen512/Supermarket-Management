@@ -8,7 +8,7 @@ GO
 
 /*BỘ PHẬN CHĂM SÓC KHÁCH HÀNG*/
 --TẶNG PHIẾU MUA HÀNG CHO KHÁCH HÀNG
-CREATE PROC SP_TANGPHIEUMUAHANG
+CREATE PROC SP_TANGPHIEUMUAHANG1
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -24,12 +24,12 @@ BEGIN
 
     -- Cursor để duyệt qua khách hàng
     DECLARE KhachHangSNCursor CURSOR FOR
-    SELECT SODIENTHOAI, NGAYSINH, MUCKHTT
+    SELECT SODIENTHOAI, NGAYSINH
     FROM KHACHHANG;
 
     OPEN KhachHangSNCursor;
 
-    FETCH NEXT FROM KhachHangSNCursor INTO @SoDienThoai, @NgaySinh, @MucKHTT;
+    FETCH NEXT FROM KhachHangSNCursor INTO @SoDienThoai, @NgaySinh;
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -40,7 +40,6 @@ BEGIN
 			RETURN;
 		END;
 		
-		waitfor delay  '00:00:03';
         -- Kiểm tra ngày sinh có nằm trong khoảng từ ngày hiện tại đến cuối tháng tiếp theo
         IF CONVERT(VARCHAR(5), @NgaySinh, 110) BETWEEN 
            CONVERT(VARCHAR(5), @NgayBatDau, 110) AND 
@@ -57,7 +56,7 @@ BEGIN
             END;
 			
 			
-			waitfor delay  '00:00:03';
+			WAITFOR DELAY '00:00:10';
 
 			--(chổ này) đọc lấy mã khtt của khách hàng
 			IF EXISTS (SELECT MUCKHTT FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
@@ -254,7 +253,7 @@ GO
 
 
 --SP xóa tài khoản khách hàng 
-CREATE PROC SP_XOATAIKHOAN
+CREATE PROC SP_XOATAIKHOAN1
 	@SoDienThoai CHAR(10), @TenKH NVARCHAR(255), @NgaySinh DATE
 AS
 BEGIN
@@ -276,7 +275,6 @@ BEGIN
         RAISERROR (N'Không thể xóa tài khoản vì đã có lịch sử mua hàng!', 16, 1);
         RETURN;
     END
-	WAITFOR DELAY '00:00:05';
 	DELETE FROM KHACHHANG
 	WHERE SODIENTHOAI = @SoDienThoai
 
