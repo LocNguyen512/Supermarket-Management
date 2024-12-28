@@ -231,7 +231,7 @@ BEGIN
 	SET NOCOUNT ON;
     BEGIN TRANSACTION;
 	SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
-	
+	--Kiểm tra tài khoản tồn tại hay không
 	IF NOT EXISTS (SELECT 1 FROM KHACHHANG  WITH (ROWLOCK) WHERE SODIENTHOAI = @SoDienThoai	AND NGAYSINH = @NgaySinh AND TENKH = @TenKH)
 	BEGIN
 		RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16,1);
@@ -246,6 +246,16 @@ BEGIN
     )
     BEGIN
         RAISERROR (N'Không thể xóa tài khoản vì đã có lịch sử mua hàng!', 16, 1);
+        RETURN;
+    END
+	--Kiểm tra các mối quan hệ liên quan trong phiếu mua hàng
+	IF EXISTS (
+        SELECT 1 
+        FROM PHIEUMUAHANG  WITH (ROWLOCK)
+        WHERE SODIENTHOAI = @SoDienThoai
+    )
+    BEGIN
+        RAISERROR (N'Không thể xóa tài khoản vì đã có phiếu mua hàng!', 16, 1);
         RETURN;
     END
 

@@ -185,6 +185,12 @@ CREATE PROC SP_TAOTAIKHOAN
 AS 
 BEGIN
 	SET NOCOUNT ON;
+	-- Kiểm tra tham số đầu vào
+    IF @SoDienThoai IS NULL OR @TenKH IS NULL OR @NgaySinh IS NULL
+    BEGIN
+        RAISERROR (N'Thông tin không đầy đủ, vui lòng kiểm tra lại', 16, 1);
+        RETURN; -- Thoát khỏi procedure
+    END
      
 	--KIEM TRA SDT
 	IF EXISTS (SELECT 1 FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
@@ -192,12 +198,6 @@ BEGIN
 		RAISERROR (N'Số điện thoại đã được đăng kí cho tài khoản khác',16,1);
 		RETURN;
 	END
-	-- Kiểm tra tham số đầu vào
-    IF @SoDienThoai IS NULL OR @TenKH IS NULL OR @NgaySinh IS NULL
-    BEGIN
-        RAISERROR (N'Thông tin không đầy đủ, vui lòng kiểm tra lại', 16, 1);
-        RETURN; -- Thoát khỏi procedure
-    END
 
 	--THEM VAO BANG KHACHHANG TAI KHOAN MOI
 	INSERT INTO KHACHHANG (SODIENTHOAI, TENKH, NGAYSINH,NGAYDANGKI,MUCKHTT)
@@ -648,7 +648,7 @@ GO
 --EXEC SP_XOA_SAN_PHAM 1
 
 -------------------------------------------------------------------------------------------------------
-/*BỘ PHẬN XỬ LÝ ĐƠN HÀNG*/
+--/*BỘ PHẬN XỬ LÝ ĐƠN HÀNG*/
 ﻿﻿﻿
 GO
 CREATE PROCEDURE SP_XU_LI_DON @MADONHANG NVARCHAR(50)
@@ -711,7 +711,7 @@ BEGIN
 			IF(@SOLUONG>0)
 				BEGIN
 					DECLARE @SLT INT
-					SELECT @SLT=SP.SOLUONTON
+					SELECT @SLT=SP.SOLUONGTON
 					FROM SANPHAM AS SP
 					WHERE SP.MASP=@MASP
 
@@ -735,7 +735,7 @@ BEGIN
 		END
 	ELSE
 		BEGIN
-			RAISERROR(N'Không tìm thấy mã sản phẩm phù hợp',16,1)
+			RAISERROR(N'Không tìm thấy mã sản phẩm phù hợp',16,1);
 		END
 
 END
