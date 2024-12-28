@@ -572,6 +572,161 @@ END
 GO
 -- EXEC SP_KIEMTRA_APDUNG_KHUYENMAI 1, '2024-12-28', N'THÂN THIẾT'
 
+-- 5. Xóa khuyến mãi
+CREATE PROCEDURE SP_XOA_KHUYEN_MAI
+AS
+BEGIN
+    DECLARE @MAKHUYENMAI INT;
+
+    -- Lặp qua tất cả các chương trình khuyến mãi
+    DECLARE CUR_KHUYENMAI CURSOR FOR
+    SELECT MAKHUYENMAI
+    FROM KHUYENMAI
+    WHERE NGAYKETTHUC < GETDATE();
+
+    OPEN CUR_KHUYENMAI;
+
+    FETCH NEXT FROM CUR_KHUYENMAI INTO @MAKHUYENMAI;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Xóa các thông tin sản phẩm khuyến mãi
+        DELETE FROM SANPHAM_KHUYENMAI
+        WHERE KHUYENMAIID = @MAKHUYENMAI;
+
+        -- Xóa các thông tin khuyến mãi cho khách hàng
+        DELETE FROM KHUYENMAI_KHACHHANG
+        WHERE MAKHUYENMAI = @MAKHUYENMAI;
+
+        -- Xóa khuyến mãi
+        DELETE FROM KHUYENMAI
+        WHERE MAKHUYENMAI = @MAKHUYENMAI;
+
+        FETCH NEXT FROM CUR_KHUYENMAI INTO @MAKHUYENMAI;
+    END
+
+    CLOSE CUR_KHUYENMAI;
+    DEALLOCATE CUR_KHUYENMAI;
+
+    PRINT N'Xóa khuyến mãi thành công';
+END
+GO
+--EXEC SP_XOA_KHUYEN_MAI
+--SELECT * FROM KHUYENMAI
+
+-- 6. Thêm danh mục
+CREATE PROCEDURE SP_THEM_DANH_MUC
+    @MADANHMUC INT,
+    @TENDANHMUC NVARCHAR(50)
+AS
+BEGIN
+    -- Kiểm tra mã danh mục đã tồn tại chưa
+    IF EXISTS (SELECT 1 FROM DANHMUC WHERE MADANHMUC = @MADANHMUC)
+    BEGIN
+        RAISERROR (N'MÃ DANH MỤC ĐÃ TỒN TẠI', 16, 1);
+        RETURN;
+    END
+
+    -- Kiểm tra tên danh mục đã tồn tại chưa
+    IF EXISTS (SELECT 1 FROM DANHMUC WHERE TENDANHMUC = @TENDANHMUC)
+    BEGIN
+        RAISERROR (N'TÊN DANH MỤC ĐÃ TỒN TẠI', 16, 1);
+        RETURN;
+    END
+
+    -- Thêm danh mục
+    INSERT INTO DANHMUC (MADANHMUC, TENDANHMUC)
+    VALUES (@MADANHMUC, @TENDANHMUC);
+
+    PRINT N'CẬP NHẬT THÀNH CÔNG';
+END
+GO
+--EXEC SP_THEM_DANH_MUC 51, N'Nội thất nhà cửa'
+
+-- 7. Xóa danh mục
+CREATE PROCEDURE SP_XOA_DANH_MUC
+    @MADANHMUC INT
+AS
+BEGIN
+    -- Kiểm tra mã danh mục đã tồn tại chưa
+    IF NOT EXISTS (SELECT 1 FROM DANHMUC WHERE MADANHMUC = @MADANHMUC)
+    BEGIN
+        RAISERROR (N'MÃ DANH MỤC KHÔNG TỒN TẠI', 16, 1);
+        RETURN;
+    END
+
+    -- Xóa danh mục
+    DELETE FROM DANHMUC WHERE MADANHMUC = @MADANHMUC;
+
+    PRINT N'XÓA DANH MỤC THÀNH CÔNG';
+END
+GO
+--EXEC SP_XOA_DANH_MUC 51
+
+-- 8. Cập nhật khuyến mãi
+CREATE OR ALTER PROCEDURE  SP_CAPNHAT_KHUYEN_MAI
+    @MAKHUYENMAI NVARCHAR(50),
+    @NGAYKETTHUC_MOI DATE,
+    @SOLUONG_APDUNG INT = NULL
+AS
+BEGIN
+    -- Kiểm tra mã khuyến mãi có tồn tại chưa
+    IF NOT EXISTS (SELECT 1 FROM KHUYENMAI WHERE MAKHUYENMAI = @MAKHUYENMAI)
+    BEGIN
+        RAISERROR (N'MÃ KHUYẾN MÃI KHÔNG TỒN TẠI', 16, 1);
+        RETURN;
+    END
+
+    -- Kiểm tra ngày khuyến mãi mới có lớn hơn hoặc bằng ngày hiện tại không
+    IF @NGAYKETTHUC_MOI < GETDATE()
+    BEGIN
+        RAISERROR (N'NGÀY KẾT THÚC MỚI PHẢI LỚN HƠN HOẶC BẰNG NGÀY HIỆN TẠI', 16, 1);
+        RETURN;
+    END
+
+    -- Kiểm tra số lượng áp dụng mới nếu không null
+    IF @SOLUONG_APDUNG IS NOT NULL
+    BEGIN
+        DECLARE @MASP INT, @SLTON INT;
+
+        SELECT TOP 1 @MASP = SP.MASP, @SLTON = SOLUONGTON
+        FROM SANPHAM_KHUYENMAI SPKM
+        INNER JOIN SANPHAM SP ON SPKM.MASP = SP.MASP
+        WHERE SPKM.KHUYENMAIID = @MAKHUYENMAI;
+
+        IF @SOLUONG_APDUNG > @SLTON
+        BEGIN
+            RAISERROR (N'SỐ LƯỢNG ÁP DỤNG MỚI KHÔNG ĐƯỢC LỚN HƠN SỐ LƯỢNG TỒN KHO', 16, 1);
+            RETURN;
+        END
+
+        -- Cập nhật số lượng áp dụng mới
+        UPDATE SANPHAM_KHUYENMAI
+        SET SLAPDUNG = @SOLUONG_APDUNG
+        WHERE KHUYENMAIID = @MAKHUYENMAI;
+		UPDATE KHUYENMAI
+        SET SOLUONGTOIDA = @SOLUONG_APDUNG
+        WHERE MAKHUYENMAI = @MAKHUYENMAI;
+    END
+
+    -- Cập nhật ngày kết thúc khuyến mãi mới cho chương trình khuyến mãi
+    UPDATE KHUYENMAI
+    SET NGAYKETTHUC = @NGAYKETTHUC_MOI
+    WHERE MAKHUYENMAI = @MAKHUYENMAI;
+
+    PRINT N'CẬP NHẬT KHUYẾN MÃI THÀNH CÔNG';
+END
+GO
+--SELECT * FROM KHUYENMAI
+--EXEC SP_CAPNHAT_KHUYEN_MAI 14, '2025-1-1', 400
+
+/*
+DROP PROCEDURE
+    dbo.SP_THEM_SAN_PHAM,
+    dbo.SP_THEM_KHUYEN_MAI,
+    dbo.SP_KIEMTRA_APDUNG_KHUYENMAI,
+	dbo.SP_XOA_SAN_PHAM;
+*/
 -------------------------------------------------------------------------------------------------------
 /*BỘ PHẬN XỬ LÝ ĐƠN HÀNG*/
 CREATE PROCEDURE SP_XU_LI_DON @MADONHANG NVARCHAR(50)
