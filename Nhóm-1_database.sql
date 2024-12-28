@@ -1,12 +1,9 @@
 ﻿USE MASTER
 GO
-IF DB_ID('SupermarketDB') IS NOT NULL
-	DROP DATABASE SupermarketDB;
+DROP DATABASE SupermarketDB;
 GO
--- Tạo Database
 CREATE DATABASE SupermarketDB;
 GO
-
 USE SupermarketDB;
 GO
 
