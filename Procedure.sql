@@ -316,12 +316,12 @@ BEGIN
     BEGIN TRANSACTION;
 
     -- Đặt mức cô lập giao dịch là REPEATABLE READ
-    SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 
     -- Kiểm tra mã sản phẩm phải tồn tại
     IF NOT EXISTS (
         SELECT 1
-        FROM SANPHAM WITH (REPEATABLEREAD)
+        FROM SANPHAM WITH (HOLDLOCK)
         WHERE MASP = @MASP
     )
     BEGIN
@@ -329,14 +329,6 @@ BEGIN
         RAISERROR (N'Mã sản phẩm không tồn tại.', 16, 1);
         RETURN;
     END
-
-    -- Xóa các thông tin khuyến mãi liên quan đến sản phẩm
-    DELETE FROM KHUYENMAI_KHACHHANG
-    WHERE MAKHUYENMAI IN (
-        SELECT DISTINCT KHUYENMAIID
-        FROM SANPHAM_KHUYENMAI WITH (REPEATABLEREAD)
-        WHERE MASP = @MASP
-    );
 
 	-- Xóa các khuyến mãi liên quan sản phẩm
     DELETE FROM SANPHAM_KHUYENMAI

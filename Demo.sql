@@ -641,13 +641,6 @@ BEGIN
         RETURN;
     END
 
-    -- Xóa các thông tin khuyến mãi liên quan đến sản phẩm
-    DELETE FROM KHUYENMAI_KHACHHANG
-    WHERE MAKHUYENMAI IN (
-        SELECT DISTINCT KHUYENMAIID
-        FROM SANPHAM_KHUYENMAI
-        WHERE MASP = @MASP
-    );
     -- Xóa các khuyến mãi liên quan sản phẩm
     DELETE FROM SANPHAM_KHUYENMAI
     WHERE MASP = @MASP;
