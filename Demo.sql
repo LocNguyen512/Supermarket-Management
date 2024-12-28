@@ -2,6 +2,10 @@
 USE SupermarketDB
 GO
 
+
+
+
+
 /*BỘ PHẬN CHĂM SÓC KHÁCH HÀNG*/
 --TẶNG PHIẾU MUA HÀNG CHO KHÁCH HÀNG
 CREATE PROC SP_TANGPHIEUMUAHANG
@@ -34,9 +38,9 @@ BEGIN
 		BEGIN
 			RAISERROR (N'Không tìm thấy số điện thoại này trong dữ liệu khách hàng',16,1);
 			RETURN;
-		END
-
-
+		END;
+		
+		waitfor delay  '00:00:03';
         -- Kiểm tra ngày sinh có nằm trong khoảng từ ngày hiện tại đến cuối tháng tiếp theo
         IF CONVERT(VARCHAR(5), @NgaySinh, 110) BETWEEN 
            CONVERT(VARCHAR(5), @NgayBatDau, 110) AND 
@@ -51,7 +55,9 @@ BEGIN
                 IF NOT EXISTS (SELECT 1 FROM PHIEUMUAHANG WHERE MAPHIEUMUAHANG = @MaPhieu)
                     BREAK; -- Thoát vòng lặp nếu mã là duy nhất
             END;
-
+			
+			
+			waitfor delay  '00:00:03';
 
 			--(chổ này) đọc lấy mã khtt của khách hàng
 			IF EXISTS (SELECT MUCKHTT FROM KHACHHANG WHERE SODIENTHOAI = @SoDienThoai)
@@ -60,7 +66,7 @@ BEGIN
 			END
 			ELSE 
 			BEGIN
-				RAISERROR (N'Không tìm thấy dữ liệu khách hàng này',16,1);
+				RAISERROR (N'Không tìm thấy dữ liệu khách hàng này hehe',16,1);
 				RETURN;
 			END
 
@@ -211,7 +217,6 @@ END
 GO
 
 
-
 --SP Sửa thông tin liên lạc cho khách hàng có nhu cầu thay đổi
 CREATE PROC SP_SUATHONGTINLIENLAC 
 	@SoDienThoaiCu CHAR(10), @TenKHCu NVARCHAR(255), @SoDienThoaiMoi CHAR(10), @TenKHMoi NVARCHAR(255), @NgaySinh DATE
@@ -237,8 +242,8 @@ BEGIN
     END
 
 	UPDATE KHACHHANG
-	SET SODIENTHOAI = @SoDienThoaiCu, TENKH  =@TenKHMoi
-	WHERE SODIENTHOAI = @SoDienThoaiMoi
+	SET SODIENTHOAI = @SoDienThoaiMoi, TENKH  =@TenKHMoi
+	WHERE SODIENTHOAI = @SoDienThoaiCu
 	
 	PRINT N'Cập nhật thông tin thành công!';
 		
@@ -261,7 +266,6 @@ BEGIN
 		RAISERROR (N'Không tìm thấy tài khoản ứng với thông tin nhập vào!', 16,1);
 		RETURN;
 	END
-
 	-- Kiểm tra các mối quan hệ liên quan (nếu có)
     IF EXISTS (
         SELECT 1 
@@ -272,7 +276,7 @@ BEGIN
         RAISERROR (N'Không thể xóa tài khoản vì đã có lịch sử mua hàng!', 16, 1);
         RETURN;
     END
-
+	WAITFOR DELAY '00:00:05';
 	DELETE FROM KHACHHANG
 	WHERE SODIENTHOAI = @SoDienThoai
 
@@ -468,7 +472,7 @@ BEGIN
     -- Thêm khuyến mãi vào bảng KHUYENMAI
     INSERT INTO KHUYENMAI (MAKHUYENMAI, MALOAIKHUYENMAI, TYLEGIAM, NGAYBATDAU, NGAYKETTHUC, SOLUONGTOIDA)
     VALUES (@MAKHUYENMAI, @MALOAIKHUYENMAI, @TYLEGIAM, @NGAYBATDAU, @NGAYKETTHUC, @SOLUONGTOIDA);
-
+	waitfor delay '00:00:10' 
     -- Xử lý từng loại khuyến mãi
     IF @MALOAIKHUYENMAI = '3' -- MEMBER-SALE
     BEGIN
@@ -1318,3 +1322,15 @@ BEGIN
     COMMIT TRANSACTION;
 END;
 GO
+/*LỖI LOST UPDATE*/
+
+/*LỖI PHANTOM READ*/
+
+-- TÌNH HUỐNG 3
+select* from SANPHAM
+EXEC SP_THEM_SAN_PHAM 1, N'Áo thun', N'100% cotton', 'SamSung', 100000, N'Thời trang', 500, 300
+EXEC SP_THEM_KHUYEN_MAI '14', 1, NULL, '1', 50,'2024-12-28','2024-12-30', 200, NULL
+EXEC SP_XOA_SAN_PHAM 2
+
+
+/*LỖI UNREPEATABLE READ*/
